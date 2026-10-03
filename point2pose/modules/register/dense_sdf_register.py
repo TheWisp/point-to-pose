@@ -44,6 +44,9 @@ class DenseSDFRegister(SVDClusterRANSACRegister):
         self._dense_tau_m = float(config.get("dense_inlier_tau_m", 0.008))
         self._dense_min_support = float(config.get("dense_min_support", 0.3))
         self._dense_min_inlier_ratio = float(config.get("dense_min_inlier_ratio", 0.5))
+        self._dense_veto_ratio = float(config.get("dense_veto_ratio", 1.5))
+        self._dense_veto_floor_m = float(config.get("dense_veto_floor_m", 0.005))
+        self._dense_mad_scale = float(config.get("dense_mad_scale", 2.5))
         self._dense_device = str(config.get("dense_device", "cuda" if torch.cuda.is_available() else "cpu"))
         self._vol_cache: dict = {}
 
@@ -128,6 +131,23 @@ class DenseSDFRegister(SVDClusterRANSACRegister):
         if info["support"] < self._dense_min_support or info["inlier_ratio"] < self._dense_min_inlier_ratio:
             dense["reason"] = "no_agreement"
             return T_sparse, stats
+        # The tracked points keep their identity from frame to frame; the depth surface under the
+        # mask does not (a finger on the object is depth under the mask). A dense answer that moves
+        # the sparse inliers off their observations by more than the sparse answer did is refused.
+        if sparse_ok:
+            inl = np.asarray(stats["inliers"], dtype=bool)
+            T_dense = inverse_SE3(T_c2o)
+            r_dense = np.linalg.norm(
+                src_pcd[inl] @ T_dense[:3, :3].T + T_dense[:3, 3] - tgt_pcd[inl], axis=1
+            )
+            r_sparse = np.linalg.norm(
+                src_pcd[inl] @ np.asarray(T_sparse)[:3, :3].T + np.asarray(T_sparse)[:3, 3] - tgt_pcd[inl], axis=1
+            )
+            dense["sparse_median_m"] = float(np.median(r_dense))
+            dense["sparse_median_before_m"] = float(np.median(r_sparse))
+            if np.median(r_dense) > max(self._dense_veto_ratio * np.median(r_sparse), self._dense_veto_floor_m):
+                dense["reason"] = "vetoed_by_tracks"
+                return T_sparse, stats
         dense["applied"] = True
         stats["dense_residuals"] = info["residuals"]
         stats["dense_inliers"] = info["inliers"]
@@ -235,10 +255,17 @@ class DenseSDFRegister(SVDClusterRANSACRegister):
             if int(valid.sum()) < self._dense_min_pts:
                 return None
             r_v, g_v, x_v = r[valid], g[valid], pts_obj[valid]
+            r_abs = r_v.abs()
+            med = r_abs.median()
+            mad = (r_abs - med).abs().median()
+            keep = r_abs <= med + self._dense_mad_scale * mad + 1e-4  # the trimmed set, as the parent trims
             w = torch.ones_like(r_v)
-            big = r_v.abs() > self._dense_huber_m
-            w[big] = self._dense_huber_m / r_v.abs()[big]
-            cost = float((w * r_v * r_v).mean())
+            big = r_abs > self._dense_huber_m
+            w[big] = self._dense_huber_m / r_abs[big]
+            w = w * keep.to(w.dtype)
+            if int(keep.sum()) < self._dense_min_pts:
+                return None
+            cost = float((w * r_v * r_v).sum() / keep.sum())
             return r_v, g_v, x_v, w, valid, cost
 
         state = evaluate(T)
