@@ -400,8 +400,10 @@ class FrontEnd:
                 fe_timings["extract_valid"] += time.time() - t_start
 
                 prev_pose = obj.pose.copy()
-                # solve frame to map registration
-                if key_points.shape[0] >= 3 and correspond_curr3d.shape[0] >= 3:
+                # solve frame to map registration; a register that can hold the pose on the dense
+                # surface is called even when the tracked points cannot carry a fit
+                dense_hold = bool(getattr(self.register, "dense_hold", False))
+                if (key_points.shape[0] >= 3 and correspond_curr3d.shape[0] >= 3) or dense_hold:
                     t_start = time.time()
 
                     T_c2w_est, stats_reg = self.register.register(
@@ -709,6 +711,12 @@ class FrontEnd:
                 stats["num_confirmed_inliers"] = int(total_inliers - tentative_inliers)
 
     def _compute_mean_residual(self, stats: dict):
+        # A dense register reports the whole visible surface's agreement; that is the residual.
+        if stats.get("dense_residuals") is not None:
+            dres = np.asarray(stats["dense_residuals"], dtype=float)
+            dinl = np.asarray(stats.get("dense_inliers", np.zeros(0)), dtype=bool)
+            if dres.size and dinl.size == dres.size and np.any(dinl):
+                return float(np.mean(dres[dinl]))
         residuals = stats.get("residuals", np.array([]))
         inliers = stats.get("inliers", np.array([]))
         if len(residuals) > 0:
@@ -764,6 +772,8 @@ class FrontEnd:
 
         dt, ddeg = self._se3_delta(T_candidate, T_prev)
         inliers = np.asarray(stats.get("inliers", np.array([])), dtype=bool)
+        if stats.get("dense_inliers") is not None:  # the dense surface is the support
+            inliers = np.asarray(stats["dense_inliers"], dtype=bool)
         used = int(inliers.shape[0])
         ninliers = int(np.sum(inliers)) if used > 0 else 0
         inlier_ratio = float(ninliers / max(1, used))

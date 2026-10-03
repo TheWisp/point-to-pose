@@ -8,3 +8,4 @@ from .svd_cluster_register import SVDClusterRegister
 from .pnp_cluster_ransac_register import PnPClusterRANSACRegister
 from .svd_outlier_sdf_register import SVDOutlierSDFRegister
 from .svd_cluster_sdf_register import SVDClusterSDFRefineRegister
+from .dense_sdf_register import DenseSDFRegister

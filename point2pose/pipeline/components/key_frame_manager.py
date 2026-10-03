@@ -1502,6 +1502,17 @@ class KeyFrameManager:
         if not reg_stats:
             return True  # if stats missing, don't block
 
+        if reg_stats.get("dense_inliers") is not None:
+            # A dense register: the map may grow only when the visible surface agrees with it.
+            dinl = np.asarray(reg_stats["dense_inliers"], dtype=bool).reshape(-1)
+            dres = np.asarray(reg_stats.get("dense_residuals", np.zeros(0)), dtype=float).reshape(-1)
+            n_in = int(np.count_nonzero(dinl))
+            ratio = float(n_in / max(1, dinl.size))
+            if n_in < self.anchor_min_inliers or ratio < self.anchor_min_inlier_ratio:
+                return False
+            if dres.size == dinl.size and n_in > 0 and float(np.median(dres[dinl])) > self.anchor_max_median_res:
+                return False
+            return True
         inliers = reg_stats.get("inliers", None)
         if inliers is None:
             return True
