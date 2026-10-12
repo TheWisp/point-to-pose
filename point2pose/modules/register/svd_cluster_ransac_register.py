@@ -782,8 +782,7 @@ class SVDClusterRANSACRegister(Register):
         )
 
         # Final hard support gate (minimal safety check):
-        # if the finally selected hypothesis has too few inliers, fall back to
-        # init_pose (or identity when init_pose is unavailable).
+        # If refinement has too few inliers, retain the unrefined candidate.
         final_inlier_gate = {
             "applied": False,
             "selected_ninliers": int(selected_ninliers),
@@ -811,6 +810,9 @@ class SVDClusterRANSACRegister(Register):
             inliers = inliers_fb
             final_inlier_gate["applied"] = True
             final_inlier_gate["fallback_ninliers"] = int(np.count_nonzero(inliers_fb))
+        elif self._enable_sdf_refine:
+            # The accepted pose must be the one these residuals describe.
+            selected_T = refined_T
 
         stats["clusters"] = candidates
         stats["best_cluster_idx"] = best_cluster_idx
