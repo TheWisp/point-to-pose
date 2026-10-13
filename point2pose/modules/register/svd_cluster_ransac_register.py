@@ -900,16 +900,26 @@ class SVDClusterRANSACRegister(Register):
         if inlier_idx.size < self._min_inliers:
             return None
 
-        # 3) refine on inliers
-        Tr = (
-            self._weighted_svd_fit(p0[inlier_idx], tgt_pcd[inlier_idx], w[inlier_idx])
-            if w is not None
-            else self._svd_fit(p0[inlier_idx], tgt_pcd[inlier_idx])
-        )
-
-        r_all = np.linalg.norm(transform_pts(Tr, p0[idx]) - tgt_pcd[idx], axis=1)
-
-        inl_all = r_all <= self._inlier_thres
+        # 3) Refit when refinement changes the consensus. Otherwise a point
+        # rejected by the final residual check can still tilt the returned
+        # least-squares pose. Use the existing iteration budget and threshold;
+        # an unchanged consensus takes exactly the original single fit.
+        inl_all = best_inl
+        for _ in range(max(1, int(self._max_iter))):
+            inlier_idx = idx[inl_all]
+            if inlier_idx.size < self._min_inliers:
+                return None
+            Tr = (
+                self._weighted_svd_fit(p0[inlier_idx], tgt_pcd[inlier_idx], w[inlier_idx])
+                if w is not None
+                else self._svd_fit(p0[inlier_idx], tgt_pcd[inlier_idx])
+            )
+            r_all = np.linalg.norm(transform_pts(Tr, p0[idx]) - tgt_pcd[idx], axis=1)
+            next_inliers = r_all <= self._inlier_thres
+            converged = np.array_equal(inl_all, next_inliers)
+            inl_all = next_inliers
+            if converged:
+                break
 
         inlier_idx = idx[inl_all]
         if inlier_idx.size < self._min_inliers:
