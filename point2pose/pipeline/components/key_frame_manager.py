@@ -1,3 +1,4 @@
+from point2pose.utils.tracked_depth import convert_tracked_pixel_to_world
 import os
 from collections import defaultdict
 from typing import List, Dict, Tuple
@@ -489,7 +490,7 @@ class KeyFrameManager:
             track_table.add_new_points_to_track_obj_maps(new_indices, obj_id)
 
             # Lift to 3D using the SAME frame used for sampling
-            new_points_3d, valid_new_points_3d = convert_pixel_to_world(
+            new_points_3d, valid_new_points_3d = convert_tracked_pixel_to_world(
                 pixel=new_sampled_points,
                 depth_image=anchor_frame.depth,
                 cam_intrinsics=anchor_frame.intrinsics,
@@ -757,7 +758,7 @@ class KeyFrameManager:
             # Nothing sampled; leave track_table empty
             return
 
-        track_3d, track_valid = convert_pixel_to_world(
+        track_3d, track_valid = convert_tracked_pixel_to_world(
             pixel=all_sampled_points,
             depth_image=frame.depth,
             cam_intrinsics=frame.intrinsics,

@@ -1,3 +1,4 @@
+from point2pose.utils.tracked_depth import convert_tracked_pixel_to_world
 import time
 import os
 import numpy as np
@@ -257,7 +258,7 @@ class FrontEnd:
         ##              2D -> 3D conversion                     ##
         ##########################################################
         t_start = time.time()
-        track_3d, track_valid = convert_pixel_to_world(
+        track_3d, track_valid = convert_tracked_pixel_to_world(
             pixel=tracks,
             depth_image=frame.depth,
             cam_intrinsics=frame.intrinsics,
