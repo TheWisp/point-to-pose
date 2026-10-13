@@ -85,3 +85,25 @@ def test_clean_moving_object_preserves_the_known_rigid_transform():
     candidate = reg._RANSAC(src, dst, None, np.ones(len(src), bool), None)
     np.testing.assert_allclose(candidate["T"], expected, atol=1e-12)
     assert candidate["ninliers"] == len(src)
+
+
+def test_explicit_one_pass_mode_retains_the_recorded_rejected_point_influence():
+    data = json.loads(
+        (Path(__file__).parent / "fixtures/depth_edge_correspondences.json").read_text()
+    )
+    src, dst = np.asarray(data["src_pcd"]), np.asarray(data["tgt_pcd"])
+    reg = SVDClusterRANSACRegister(
+        {
+            "ransac_iters": 100,
+            "sample_size": 4,
+            "min_inliers": 5,
+            "inlier_thres": 0.005,
+            "consensus_refit": False,
+        }
+    )
+    np.random.seed(17)
+    candidate = reg._RANSAC(src, dst, None, np.ones(len(src), bool), None)
+    ids = candidate["inliers"]
+    assert 1 not in ids
+    refitted = reg._svd_fit(src[ids], dst[ids])
+    assert np.max(np.abs(candidate["T"] - refitted)) > 1e-4

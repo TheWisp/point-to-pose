@@ -1,4 +1,4 @@
-from point2pose.utils.tracked_depth import convert_tracked_pixel_to_world
+from point2pose.utils.tracked_depth import lookup_tracked_depth
 import time
 import os
 import numpy as np
@@ -26,6 +26,7 @@ class FrontEnd:
         self.num_obj = self.pipeline_cfg.get("max_num_obj", 1)
 
         # ------------- depth related -------------
+        self.tracked_depth_mode = self.pipeline_cfg.get("tracked_depth_mode", "nearest")
         self.min_depth = self.pipeline_cfg.get("min_depth", 0.05)
         self.max_depth = self.pipeline_cfg.get("max_depth", 1.0)
         self.fill_missing_depth = self.pipeline_cfg.get("fill_missing_depth", False)
@@ -258,7 +259,8 @@ class FrontEnd:
         ##              2D -> 3D conversion                     ##
         ##########################################################
         t_start = time.time()
-        track_3d, track_valid = convert_tracked_pixel_to_world(
+        track_3d, track_valid = lookup_tracked_depth(
+            mode=self.tracked_depth_mode,
             pixel=tracks,
             depth_image=frame.depth,
             cam_intrinsics=frame.intrinsics,

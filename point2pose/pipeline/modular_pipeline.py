@@ -31,6 +31,9 @@ class ModularPipeline:
         self.cfg = cfg
         self.pipeline_cfg = cfg.pipeline.params
         self.use_key_frame_graph = self.pipeline_cfg.get("use_key_frame_graph", True)
+        self.preserve_delayed_keyframe_motion = bool(
+            self.pipeline_cfg.get("preserve_delayed_keyframe_motion", True)
+        )
 
         # Components
         self.frontend = FrontEnd(cfg)
@@ -564,8 +567,11 @@ class ModularPipeline:
             if self.use_key_frame_graph and key in updated_global_poses:
                 global_pose = updated_global_poses[key]
 
-                if kf is latest_keyframe[kf.obj_id]:
-                    current_pose = current_from_keyframe[key] @ global_pose
+                if not self.preserve_delayed_keyframe_motion or kf is latest_keyframe[kf.obj_id]:
+                    current_pose = (
+                        current_from_keyframe[key] @ global_pose
+                        if self.preserve_delayed_keyframe_motion else global_pose
+                    )
                     dt, ddeg = self._se3_delta(current_pose, obj.pose)
                     if dt > self.max_rel_translation or ddeg > self.max_rel_rotation_deg:
                         print(

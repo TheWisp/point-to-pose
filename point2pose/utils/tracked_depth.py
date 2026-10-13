@@ -91,3 +91,20 @@ def convert_tracked_pixel_to_world(
         points[ids[ok]] = median[ok] @ transform[:3, :3].T + transform[:3, 3]
         valid[ids[ok]] = True
     return (points[valid] if remove_invalid else points), valid
+
+
+def lookup_tracked_depth(*args, mode="nearest", **kwargs):
+    """Select one depth association rule consistently at init, step and growth.
+
+    The neighbourhood rule is an alternative to nearest-pixel lookup, not an
+    additional correction that can be stacked on it. Legacy truncation remains
+    explicit for reproducing recorded experiments.
+    """
+    if mode == "edge":
+        return convert_tracked_pixel_to_world(*args, **kwargs)
+    if mode not in ("nearest", "legacy"):
+        raise ValueError(f"Unknown tracked_depth_mode: {mode!r}")
+    # Resolve at call time so the bridge's source-checked speedup is respected.
+    from point2pose.utils.camera import convert_pixel_to_world
+
+    return convert_pixel_to_world(*args, round_pixels=mode == "nearest", **kwargs)

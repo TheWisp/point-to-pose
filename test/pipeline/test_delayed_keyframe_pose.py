@@ -20,7 +20,7 @@ def pose(angles, xyz):
     return result
 
 
-def run_step(current, keyframes, optimized, *, limit=3.0):
+def run_step(current, keyframes, optimized, *, limit=3.0, preserve=True):
     pipe = ModularPipeline.__new__(ModularPipeline)
     pipe._initialized = True
     pipe.pose_log_files = []
@@ -29,6 +29,7 @@ def run_step(current, keyframes, optimized, *, limit=3.0):
     pipe.objects = [NS(pose=p.copy()) for p in current]
     pipe.use_local_graph = False
     pipe.use_key_frame_graph = True
+    pipe.preserve_delayed_keyframe_motion = preserve
     pipe.max_rel_translation = limit
     pipe.max_rel_rotation_deg = 1000.0
     fe = NS(
@@ -123,3 +124,10 @@ def test_jump_guard_checks_correction_not_time_elapsed_since_keyframe():
     np.testing.assert_allclose(result[0][:3, 3], [0.201, 0, 0], atol=1e-12)
     result, _ = run_step([current], [kf(old)], {(0, 1): current}, limit=0.01)
     np.testing.assert_allclose(result[0], current, atol=1e-12)
+
+
+def test_explicit_legacy_mode_reproduces_historical_pose_assignment():
+    old = np.eye(4)
+    current = pose([15, -7, 11], [0.02, -0.01, 0.03])
+    result, _ = run_step([current], [kf(old)], {(0, 1): old}, preserve=False)
+    np.testing.assert_array_equal(result[0], old)

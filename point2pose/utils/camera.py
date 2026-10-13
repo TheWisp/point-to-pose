@@ -230,6 +230,7 @@ def convert_pixel_to_world(
     sigma_base_a=0.003,
     sigma_base_b=0.0,
     edge_alpha=5.0,
+    round_pixels=True,
 ):
     """
     Sample the nearest depth pixel, using that same pixel's backprojection ray.
@@ -248,8 +249,9 @@ def convert_pixel_to_world(
     fx, fy = float(cam_intrinsics[0, 0]), float(cam_intrinsics[1, 1])
     cx, cy = float(cam_intrinsics[0, 2]), float(cam_intrinsics[1, 2])
 
-    xs = np.rint(pixels[:, 0]).astype(int)
-    ys = np.rint(pixels[:, 1]).astype(int)
+    sample_pixels = np.rint(pixels) if round_pixels else pixels
+    xs = sample_pixels[:, 0].astype(int)
+    ys = sample_pixels[:, 1].astype(int)
 
     in_bounds = (xs >= 0) & (xs < W) & (ys >= 0) & (ys < H)
 

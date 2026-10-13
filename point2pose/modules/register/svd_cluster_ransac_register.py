@@ -44,6 +44,9 @@ class SVDClusterRANSACRegister(Register):
         self._min_inliers = config.get("min_inliers", 6)
         self._max_clusters = config.get("max_clusters", 10)
         self._max_iter = config.get("max_iter", 15)
+        # Correctness fixes default on; explicit false reproduces old experiments.
+        self._consensus_refit = bool(config.get("consensus_refit", True))
+        self._return_refined_pose = bool(config.get("return_refined_pose", True))
         self._use_uncertainty = config.get("use_uncertainty", False)
         self._select_method = config.get("select_method", "reproj_error")
         self._select_w_prev = float(config.get("select_w_prev", 0.55))
@@ -810,7 +813,7 @@ class SVDClusterRANSACRegister(Register):
             inliers = inliers_fb
             final_inlier_gate["applied"] = True
             final_inlier_gate["fallback_ninliers"] = int(np.count_nonzero(inliers_fb))
-        elif self._enable_sdf_refine:
+        elif self._enable_sdf_refine and self._return_refined_pose:
             # The accepted pose must be the one these residuals describe.
             selected_T = refined_T
 
@@ -905,7 +908,7 @@ class SVDClusterRANSACRegister(Register):
         # least-squares pose. Use the existing iteration budget and threshold;
         # an unchanged consensus takes exactly the original single fit.
         inl_all = best_inl
-        for _ in range(max(1, int(self._max_iter))):
+        for _ in range(max(1, int(self._max_iter)) if self._consensus_refit else 1):
             inlier_idx = idx[inl_all]
             if inlier_idx.size < self._min_inliers:
                 return None
