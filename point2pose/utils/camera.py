@@ -232,7 +232,11 @@ def convert_pixel_to_world(
     edge_alpha=5.0,
 ):
     """
-    Original behavior preserved by default.
+    Sample the nearest depth pixel, using that same pixel's backprojection ray.
+
+    Truncating a floating track coordinate selects the pixel above/left rather
+    than the nearest pixel. At a depth discontinuity those may be different
+    surfaces. Integer queries (including dense mask clouds) are unchanged.
     """
     pixels = np.asarray(pixel)
     if pixels.ndim == 1:
@@ -244,8 +248,8 @@ def convert_pixel_to_world(
     fx, fy = float(cam_intrinsics[0, 0]), float(cam_intrinsics[1, 1])
     cx, cy = float(cam_intrinsics[0, 2]), float(cam_intrinsics[1, 2])
 
-    xs = pixels[:, 0].astype(int)
-    ys = pixels[:, 1].astype(int)
+    xs = np.rint(pixels[:, 0]).astype(int)
+    ys = np.rint(pixels[:, 1]).astype(int)
 
     in_bounds = (xs >= 0) & (xs < W) & (ys >= 0) & (ys < H)
 
