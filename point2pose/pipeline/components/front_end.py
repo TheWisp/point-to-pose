@@ -74,6 +74,9 @@ class FrontEnd:
         self.pose_jump_guard_enable = bool(
             self.pipeline_cfg.get("pose_jump_guard_enable", True)
         )
+        self.pose_jump_guard_object_center = bool(
+            self.pipeline_cfg.get("pose_jump_guard_object_center", True)
+        )
         self.pose_jump_guard_trans_thres = float(
             self.pipeline_cfg.get(
                 "pose_jump_guard_trans_thres", self.max_rel_translation
@@ -774,6 +777,23 @@ class FrontEnd:
             return T_candidate, False, info
 
         dt, ddeg = self._se3_delta(T_candidate, T_prev)
+        info["origin_dt"] = float(dt)
+        info["translation_reference"] = "origin"
+        # Model points share the initialization camera frame, not an object-centred
+        # frame. Translation at that origin includes a rotation lever arm. Measure
+        # the displacement of the same model centroid under both candidate poses;
+        # retain the independent rotation/support checks and existing thresholds.
+        if getattr(self, "pose_jump_guard_object_center", True):
+            points = np.asarray(getattr(obj, "key_points", []), dtype=float)
+            if points.ndim == 2 and points.shape[1] == 3:
+                points = points[np.isfinite(points).all(axis=1)]
+                if len(points):
+                    center = points.mean(axis=0)
+                    candidate_center = T_candidate[:3, :3] @ center + T_candidate[:3, 3]
+                    previous_center = T_prev[:3, :3] @ center + T_prev[:3, 3]
+                    dt = float(np.linalg.norm(candidate_center - previous_center))
+                    info["translation_reference"] = "object_center"
+                    info["reference_point"] = center.tolist()
         inliers = np.asarray(stats.get("inliers", np.array([])), dtype=bool)
         if stats.get("dense_inliers") is not None:  # the dense surface is the support
             inliers = np.asarray(stats["dense_inliers"], dtype=bool)
