@@ -539,6 +539,20 @@ class ModularPipeline:
         t0 = time.time()
         updated_global_poses = {}
         updated_landmarks = {}
+        # Promotion may return historical frames. Preserve current-to-keyframe
+        # motion before the graph mutates keyframe poses, and apply one correction
+        # per object using its most recent promoted keyframe.
+        current_from_keyframe = {
+            (kf.obj_id, kf.kf_idx): self.objects[kf.obj_id].pose @ inverse_SE3(kf.pose)
+            for kf in new_keyframes
+        }
+        latest_keyframe = {}
+        for kf in new_keyframes:
+            previous = latest_keyframe.get(kf.obj_id)
+            if previous is None or (kf.frame_id, kf.kf_idx) > (
+                previous.frame_id, previous.kf_idx
+            ):
+                latest_keyframe[kf.obj_id] = kf
         if self.use_key_frame_graph and new_keyframes and self.kf_graph is not None:
             updated_global_poses, updated_landmarks = self.kf_graph.update(
                 new_keyframes
@@ -550,14 +564,18 @@ class ModularPipeline:
             if self.use_key_frame_graph and key in updated_global_poses:
                 global_pose = updated_global_poses[key]
 
-                dt, ddeg = self._se3_delta(global_pose, obj.pose)
-                if dt > self.max_rel_translation or ddeg > self.max_rel_rotation_deg:
-                    print(
-                        f"Frame {frame.id}: Warning: Large pose change after global optimization for obj {kf.obj_id} kf {kf.kf_idx}. Δt={dt:.3f}m, ΔR={ddeg:.2f}deg"
-                    )
-                else:
-                    obj.pose = global_pose.copy()
-                    kf.pose = global_pose.copy()
+                if kf is latest_keyframe[kf.obj_id]:
+                    current_pose = current_from_keyframe[key] @ global_pose
+                    dt, ddeg = self._se3_delta(current_pose, obj.pose)
+                    if dt > self.max_rel_translation or ddeg > self.max_rel_rotation_deg:
+                        print(
+                            f"Frame {frame.id}: Warning: Large pose change after global optimization for obj {kf.obj_id} kf {kf.kf_idx}. Δt={dt:.3f}m, ΔR={ddeg:.2f}deg"
+                        )
+                    else:
+                        obj.pose = current_pose.copy()
+                # SDF observations belong to the historical keyframe. Its pose
+                # must not acquire the motion to the current camera frame.
+                kf.pose = global_pose.copy()
 
                 if kf.obj_id in updated_landmarks:
                     lm_pts, lm_global_track_ids = updated_landmarks[kf.obj_id]
